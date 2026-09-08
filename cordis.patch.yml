@@ -1,0 +1,11 @@
+# Pin the composite provider so selection is deterministic regardless of how
+# many channels (tavily / serper) are enabled. Routing happens inside the
+# provider at search time (credentials), and falls back to official DeepSeek
+# when both channels are off — no second searchProvider write on rc.6.
+- id: web
+  config:
+    searchProvider: web-search
+
+- insert:
+    - id: web-search
+      name: dsh-web-search

@@ -1,0 +1,63 @@
+{
+  "name": "dsh-web-search",
+  "version": "0.4.0",
+  "type": "module",
+  "description": "DSH 网页搜索插件：支持 Tavily / Serper 双渠道，Key/无 Key 模式，自定义 API 地址，一键切回官方 DeepSeek",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SZMY-haruhi/dsh-tavily.git"
+  },
+  "bugs": {
+    "url": "https://github.com/SZMY-haruhi/dsh-tavily/issues"
+  },
+  "homepage": "https://github.com/SZMY-haruhi/dsh-tavily#readme",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/client.js",
+    "cordis.patch.yml"
+  ],
+  "license": "MIT",
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "web-search",
+    "tavily",
+    "serper"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-slots"
+      ],
+      "platform": "web"
+    }
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "^3.18.1"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-web": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-web-search-deepseek": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-credentials": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-launch-environment": "^0.1.0-rc.6"
+  }
+}
