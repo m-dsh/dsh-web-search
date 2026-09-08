@@ -73,14 +73,3 @@ Provider id：`web-search`（综合 Provider，内部按默认渠道 + 凭证路
 ## 更新
 
 - **0.4.0** 由 `dsh-tavily-search` 更名重构为 `dsh-web-search`：Tavily / Serper 双渠道并存、各自自定义接口地址、默认渠道下拉选择、双探针端点。设置改为 `settings.section` 独立页面。综合 Provider id `web-search`，`available()` 恒真（渠道 + 官方 DeepSeek 兜底）。
-
----
-
-## Author
-
-<a href="https://tonkatsu258.vercel.app/index.html">
-  <img src="docs/avatar.png" width="96" height="96" alt="tonkatsu258" />
-</a>
-
-**感谢star❤️**
-**[tonkatsu258](https://tonkatsu258.vercel.app/index.html)** · [个人网站](https://tonkatsu258.vercel.app/index.html)

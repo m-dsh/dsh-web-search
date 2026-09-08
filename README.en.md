@@ -73,14 +73,3 @@ You can also put these in `$DSH_HOME/.credentials.yaml`. Do not commit real keys
 ## Updates
 
 - **0.4.0** Renamed from `dsh-tavily-search` to `dsh-web-search`: Tavily + Serper dual channel, custom API URLs, default channel dropdown, dual probe endpoints. Settings page is now a standalone `settings.section`. Composite provider id `web-search` with always-true `available()` (channels or official DeepSeek fallback).
-
----
-
-## Author
-
-<a href="https://tonkatsu258.vercel.app/index.html">
-  <img src="docs/avatar.png" width="96" height="96" alt="tonkatsu258" />
-</a>
-
-**Thanks for the star ❤️**
-**[tonkatsu258](https://tonkatsu258.vercel.app/index.html)** · [personal site](https://tonkatsu258.vercel.app/index.html)
