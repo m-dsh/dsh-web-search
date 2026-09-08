@@ -1,17 +1,27 @@
 import Schema from "@deepseek-ai/schemastery";
-import { Context } from "@deepseek-ai/cordis";
 
 //#region src/index.d.ts
 
-interface DshContext extends Context {
+interface DshContext {
   settings: {
     set: (ns: string, key: string, value: unknown) => void;
-    register<T>(ns: unknown, schema: unknown, opts?: unknown): unknown;
+    register(ns: unknown, schema: unknown, opts?: {
+      base?: unknown;
+      applies?: string;
+    }): void;
   };
   get(key: 'webServer'): DshWebServer | undefined;
   get(key: 'credentials'): DshCredentials | undefined;
   get(key: 'webSearchProviders'): Record<string, WebSearchProvider> | undefined;
   get(key: string): unknown;
+  on(event: string, handler: (...args: unknown[]) => void): void;
+}
+interface DshWebServer {
+  register(opts: {
+    kind: 'exact';
+    path: string;
+    handler: (req: unknown, res: unknown) => void | Promise<void>;
+  }): void;
 }
 interface DshCredentials {
   resolve: (ref: string) => Promise<{
@@ -53,15 +63,8 @@ interface WebSearchResult {
 }
 interface WebSearchProvider {
   id: string;
-  available(ctx: Context, signal?: AbortSignal): boolean | Promise<boolean>;
+  available(ctx: unknown, signal?: AbortSignal): boolean | Promise<boolean>;
   search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult>;
-}
-interface DshWebServer {
-  register(opts: {
-    kind: 'exact';
-    path: string;
-    handler: (req: unknown, res: unknown) => void | Promise<void>;
-  }): void;
 }
 declare const name = "dsh-web-search";
 declare const inject: string[];

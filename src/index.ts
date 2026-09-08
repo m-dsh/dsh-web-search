@@ -6,19 +6,27 @@
  */
 
 import Schema from '@deepseek-ai/schemastery'
+import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 
-// Extend the Context type to include DSH services
-import type { Context as CordisContext } from '@deepseek-ai/cordis'
-
-interface DshContext extends CordisContext {
+// DSH-injected context — not extending Cordis to avoid conflicting settings type
+interface DshContext {
   settings: {
     set: (ns: string, key: string, value: unknown) => void
-    register<T>(ns: unknown, schema: unknown, opts?: unknown): unknown
+    register(ns: unknown, schema: unknown, opts?: { base?: unknown; applies?: string }): void
   }
   get(key: 'webServer'): DshWebServer | undefined
   get(key: 'credentials'): DshCredentials | undefined
   get(key: 'webSearchProviders'): Record<string, WebSearchProvider> | undefined
   get(key: string): unknown
+  on(event: string, handler: (...args: unknown[]) => void): void
+}
+
+interface DshWebServer {
+  register(opts: {
+    kind: 'exact'
+    path: string
+    handler: (req: unknown, res: unknown) => void | Promise<void>
+  }): void
 }
 
 interface DshCredentials {
@@ -86,16 +94,8 @@ interface WebSearchResult {
 
 interface WebSearchProvider {
   id: string
-  available(ctx: CordisContext, signal?: AbortSignal): boolean | Promise<boolean>
+  available(ctx: unknown, signal?: AbortSignal): boolean | Promise<boolean>
   search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult>
-}
-
-interface DshWebServer {
-  register(opts: {
-    kind: 'exact'
-    path: string
-    handler: (req: unknown, res: unknown) => void | Promise<void>
-  }): void
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -395,7 +395,13 @@ function createProbeHandler(
 export const name = 'dsh-web-search'
 export const inject = ['webServer', 'credentials', 'settings']
 
+/** Settings 命名空间 */
+const WEB_SEARCH_NS = settingsNamespace('web-search')
+
 export function apply(ctx: DshContext, config: ConfigType): void {
+  // ── Register settings namespace (so client settingsScope.bind can read/write) ──
+  ctx.settings.register(WEB_SEARCH_NS, Config, { applies: 'live' })
+
   // ── One-time migration: copy old credential values into config ──
   void (async () => {
     for (const [credRef, cfgKey] of [
