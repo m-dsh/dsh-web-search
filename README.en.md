@@ -2,8 +2,6 @@
 
 [中文](README.md) | English
 
-[![awesome · DSH plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com) [![Recommend dshfind](https://img.shields.io/badge/Recommend-dshfind-ffd700?labelColor=555555)](https://dshfind.com/zh/plugins/SZMY-haruhi/dsh-tavily?ref=badge)
-
 ![settings](docs/settings-zh.png)
 
 Multi-channel web search for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): **Tavily + Serper** as a single composite provider. Configure both channels simultaneously, switch the default channel on the fly, or turn both off to fall back to official DeepSeek search.

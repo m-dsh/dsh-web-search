@@ -2,8 +2,6 @@
 
 中文 | [English](README.en.md)
 
-[![awesome · DSH plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com) [![推荐 dshfind](https://img.shields.io/badge/%E6%8E%A8%E8%8D%90-dshfind-ffd700?labelColor=555555)](https://dshfind.com/zh/plugins/SZMY-haruhi/dsh-tavily?ref=badge)
-
 ![settings](docs/settings-zh.png)
 
 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的多渠道网页搜索插件：**Tavily / Serper** 双渠道可同时配置，默认渠道随时切换，关闭全部渠道则回退官方 DeepSeek 搜索。
