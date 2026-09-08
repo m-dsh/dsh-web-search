@@ -17,7 +17,7 @@ dsh plugin --profile web add dsh-web-search
 Or follow GitHub:
 
 ```sh
-dsh plugin --profile web add github:SZMY-haruhi/dsh-tavily
+dsh plugin --profile web add github:m-dsh/dsh-web-search
 ```
 
 Settings → **Web Search**: toggle each channel, enter API keys, set custom URLs, and test connectivity. Use the dropdown to pick the default channel when both are on — or just enable one. Toggles and default channel apply instantly; keys and URLs use a unified "Save" button.

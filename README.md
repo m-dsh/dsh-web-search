@@ -17,7 +17,7 @@ dsh plugin --profile web add dsh-web-search
 也可以跟 GitHub：
 
 ```sh
-dsh plugin --profile web add github:SZMY-haruhi/dsh-tavily
+dsh plugin --profile web add github:m-dsh/dsh-web-search
 ```
 
 设置 → **Web 搜索**：Tavily / Serper 各自独立开关、Key、自定义接口地址和连通测试。两个都开启时用下拉选择默认渠道；只开启一个时自动使用。开关和默认渠道即时生效，Key 和接口地址统一点「保存」。
