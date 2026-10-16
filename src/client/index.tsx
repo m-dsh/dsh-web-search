@@ -458,7 +458,7 @@ function WebSearchSection(props: Record<string, unknown>): React.ReactElement {
 // ── Plugin ──────────────────────────────────────────────────
 
 export const name = 'dsh-web-search-client'
-export const inject = ['slots', 'settingsScope', 'connection'] as const
+export const inject = ['slots', 'webUiSettings', 'connection'] as const
 
 interface ClientContext {
   slots: {
@@ -474,7 +474,7 @@ interface ClientContext {
       comp: React.FC<Record<string, unknown>>,
     ): () => void
   }
-  settingsScope: {
+  webUiSettings: {
     bind<T>(spec: { namespace: string }): SettingsScope<T>
   }
   get(key: string): Connection
@@ -482,7 +482,7 @@ interface ClientContext {
 
 export function apply(ctx: ClientContext): void {
   const { api } = ctx.get('connection')
-  const scope = ctx.settingsScope.bind<WebSearchConfig>({ namespace: 'web-search' })
+  const scope = ctx.webUiSettings.bind<WebSearchConfig>({ namespace: 'web-search' })
 
   // Inject CSS
   const disposeCss = injectCss()

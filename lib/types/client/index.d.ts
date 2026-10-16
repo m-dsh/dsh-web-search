@@ -23,7 +23,7 @@ interface Connection {
     };
 }
 export declare const name = "dsh-web-search-client";
-export declare const inject: readonly ["slots", "settingsScope", "connection"];
+export declare const inject: readonly ["slots", "webUiSettings", "connection"];
 interface ClientContext {
     slots: {
         inject(key: string, factory: () => unknown): () => void;
@@ -35,7 +35,7 @@ interface ClientContext {
             inject?: () => Record<string, unknown>;
         }, comp: React.FC<Record<string, unknown>>): () => void;
     };
-    settingsScope: {
+    webUiSettings: {
         bind<T>(spec: {
             namespace: string;
         }): SettingsScope<T>;

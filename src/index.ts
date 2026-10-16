@@ -399,7 +399,7 @@ export const inject = ['webServer', 'credentials', 'settings']
 const WEB_SEARCH_NS = settingsNamespace('web-search')
 
 export function apply(ctx: DshContext, config: ConfigType): void {
-  // ── Register settings namespace (so client settingsScope.bind can read/write) ──
+  // ── Register settings namespace (so client webUiSettings.bind can read/write) ──
   ctx.settings.register(WEB_SEARCH_NS, Config, { applies: 'live' })
 
   // ── One-time migration: copy old credential values into config ──
