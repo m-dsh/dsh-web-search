@@ -6,13 +6,11 @@
  */
 
 import Schema from '@deepseek-ai/schemastery'
-import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 
 // DSH-injected context — not extending Cordis to avoid conflicting settings type
 interface DshContext {
   settings: {
-    set: (ns: string, key: string, value: unknown) => void
-    register(ns: unknown, schema: unknown, opts?: { base?: unknown; applies?: string }): void
+    update(ns: string, patch: Record<string, unknown>): Promise<void>
   }
   get(key: 'webServer'): DshWebServer | undefined
   get(key: 'credentials'): DshCredentials | undefined
@@ -395,12 +393,9 @@ function createProbeHandler(
 export const name = 'dsh-web-search'
 export const inject = ['webServer', 'credentials', 'settings']
 
-/** Settings 命名空间 */
-const WEB_SEARCH_NS = settingsNamespace('web-search')
-
 export function apply(ctx: DshContext, config: ConfigType): void {
-  // ── Register settings namespace (so client webUiSettings.bind can read/write) ──
-  ctx.settings.register(WEB_SEARCH_NS, Config, { applies: 'live' })
+  // 0.2.0-rc.2 起 settings 表单由 SettingsForms 从本包导出的 Config 自动收集，
+  // 不再手动 ctx.settings.register；客户端经 webUiSettings.bind({ namespace: 'web-search' }) 读写。
 
   // ── One-time migration: copy old credential values into config ──
   void (async () => {
@@ -416,7 +411,7 @@ export function apply(ctx: DshContext, config: ConfigType): void {
           const v: unknown = (cfgKey as string).endsWith('Enabled')
             ? truthy(credVal)
             : String(credVal)
-          ctx.settings.set('web-search', cfgKey, v)
+          await ctx.settings.update('web-search', { [cfgKey]: v })
           ;(config as Record<string, unknown>)[cfgKey] = v
         }
       } catch {
@@ -426,7 +421,7 @@ export function apply(ctx: DshContext, config: ConfigType): void {
     try {
       const defSerper = await resolveRef(ctx, DEFAULT_SERPER_REF)
       if (truthy(defSerper) && config.defaultChannel !== SERPER_CHANNEL) {
-        ctx.settings.set('web-search', 'defaultChannel', SERPER_CHANNEL)
+        await ctx.settings.update('web-search', { defaultChannel: SERPER_CHANNEL })
         config.defaultChannel = SERPER_CHANNEL
       }
     } catch {

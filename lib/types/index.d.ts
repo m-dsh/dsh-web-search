@@ -7,11 +7,7 @@
 import Schema from '@deepseek-ai/schemastery';
 interface DshContext {
     settings: {
-        set: (ns: string, key: string, value: unknown) => void;
-        register(ns: unknown, schema: unknown, opts?: {
-            base?: unknown;
-            applies?: string;
-        }): void;
+        update(ns: string, patch: Record<string, unknown>): Promise<void>;
     };
     get(key: 'webServer'): DshWebServer | undefined;
     get(key: 'credentials'): DshCredentials | undefined;
