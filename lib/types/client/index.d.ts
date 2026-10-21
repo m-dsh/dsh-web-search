@@ -1,5 +1,5 @@
 import React from 'react';
-import type { SettingsScope } from '@deepseek-ai/dsh-client-runtime/client';
+import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client';
 interface Connection {
     api: {
         credentials: {
@@ -23,7 +23,7 @@ interface Connection {
     };
 }
 export declare const name = "dsh-web-search-client";
-export declare const inject: readonly ["slots", "settingsScope", "connection"];
+export declare const inject: readonly ["slots", "configForms", "connection"];
 interface ClientContext {
     slots: {
         inject(key: string, factory: () => unknown): () => void;
@@ -35,10 +35,8 @@ interface ClientContext {
             inject?: () => Record<string, unknown>;
         }, comp: React.FC<Record<string, unknown>>): () => void;
     };
-    settingsScope: {
-        bind<T>(spec: {
-            namespace: string;
-        }): SettingsScope<T>;
+    configForms: {
+        get<T>(entryId: string): ConfigForm<T>;
     };
     get(key: string): Connection;
 }

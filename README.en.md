@@ -20,7 +20,7 @@ Or follow GitHub:
 dsh plugin --profile web add github:m-dsh/dsh-web-search
 ```
 
-Settings → **Web Search**: toggle each channel, enter API keys, set custom URLs, and test connectivity. Use the dropdown to pick the default channel when both are on — or just enable one. Toggles and default channel apply instantly; keys and URLs use a unified "Save" button.
+Requires DSH `0.2.0-rc.2` or newer. Settings → **Web Search**: toggle each channel, enter API keys, set custom URLs, and test connectivity. Use the dropdown to pick the default channel when both are on — or just enable one. Toggles, URLs, and the default channel save and apply instantly; use "Save" for API keys. Settings use `configForms` with profile entry `web-search`; access the page through localhost on the DSH computer.
 
 Remove:
 

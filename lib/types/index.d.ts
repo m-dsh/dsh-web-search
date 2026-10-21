@@ -7,17 +7,22 @@
 import Schema from '@deepseek-ai/schemastery';
 interface DshContext {
     settings: {
-        set: (ns: string, key: string, value: unknown) => void;
-        register(ns: unknown, schema: unknown, opts?: {
-            base?: unknown;
-            applies?: string;
-        }): void;
+        update(ns: string, patch: Record<string, unknown>): Promise<void>;
     };
+    get(key: 'web'): DshWeb | undefined;
     get(key: 'webServer'): DshWebServer | undefined;
     get(key: 'credentials'): DshCredentials | undefined;
     get(key: 'webSearchProviders'): Record<string, WebSearchProvider> | undefined;
     get(key: string): unknown;
     on(event: string, handler: (...args: unknown[]) => void): void;
+}
+/**
+ * The current `web` service. A provider is registered by calling a method on
+ * this service; the `webSearchProviders` registry object it replaced no longer
+ * exists, so writing to that object alone registers nothing (silently).
+ */
+interface DshWeb {
+    registerSearchProvider(provider: WebSearchProvider): () => void;
 }
 interface DshWebServer {
     register(opts: {
@@ -31,23 +36,19 @@ interface DshCredentials {
         value?: string;
     }>;
 }
-export declare const Config: Schema<Schemastery.ObjectS<{
-    maxResults: Schema<number, number>;
-    searchTimeoutMs: Schema<number, number>;
-    tavilyEnabled: Schema<boolean, boolean>;
-    serperEnabled: Schema<boolean, boolean>;
-    tavilyBaseURL: Schema<string, string>;
-    serperBaseURL: Schema<string, string>;
-    defaultChannel: Schema<string, string>;
-}>, Schemastery.ObjectT<{
-    maxResults: Schema<number, number>;
-    searchTimeoutMs: Schema<number, number>;
-    tavilyEnabled: Schema<boolean, boolean>;
-    serperEnabled: Schema<boolean, boolean>;
-    tavilyBaseURL: Schema<string, string>;
-    serperBaseURL: Schema<string, string>;
-    defaultChannel: Schema<string, string>;
-}>>;
+export declare const Config: Schema<Schemastery.ObjectS<NoInfer<{
+    maxResults: Schema<number, number, "defined">;
+    searchTimeoutMs: Schema<number, number, "defined">;
+    tavilyBaseURL: Schema<string, string, "volatile-defined">;
+    serperBaseURL: Schema<string, string, "volatile-defined">;
+    defaultChannel: Schema<string, string, "volatile-defined">;
+}>>, Schemastery.ObjectT<NoInfer<{
+    maxResults: Schema<number, number, "defined">;
+    searchTimeoutMs: Schema<number, number, "defined">;
+    tavilyBaseURL: Schema<string, string, "volatile-defined">;
+    serperBaseURL: Schema<string, string, "volatile-defined">;
+    defaultChannel: Schema<string, string, "volatile-defined">;
+}>>, "plain">;
 export type ConfigType = ReturnType<typeof Config>;
 declare module '@deepseek-ai/cordis' {
     interface Events {

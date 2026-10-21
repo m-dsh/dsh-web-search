@@ -6,19 +6,27 @@
  */
 
 import Schema from '@deepseek-ai/schemastery'
-import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 
 // DSH-injected context — not extending Cordis to avoid conflicting settings type
 interface DshContext {
   settings: {
-    set: (ns: string, key: string, value: unknown) => void
-    register(ns: unknown, schema: unknown, opts?: { base?: unknown; applies?: string }): void
+    update(ns: string, patch: Record<string, unknown>): Promise<void>
   }
+  get(key: 'web'): DshWeb | undefined
   get(key: 'webServer'): DshWebServer | undefined
   get(key: 'credentials'): DshCredentials | undefined
   get(key: 'webSearchProviders'): Record<string, WebSearchProvider> | undefined
   get(key: string): unknown
   on(event: string, handler: (...args: unknown[]) => void): void
+}
+
+/**
+ * The current `web` service. A provider is registered by calling a method on
+ * this service; the `webSearchProviders` registry object it replaced no longer
+ * exists, so writing to that object alone registers nothing (silently).
+ */
+interface DshWeb {
+  registerSearchProvider(provider: WebSearchProvider): () => void
 }
 
 interface DshWebServer {
@@ -43,10 +51,8 @@ const TAVILY_CHANNEL = 'tavily'
 const SERPER_CHANNEL = 'serper'
 const DEFAULT_TIMEOUT_MS = 30_000
 
-const TAVILY_ENABLED_REF = 'TAVILY_SEARCH_ENABLED'
 const TAVILY_KEY_REF = 'TAVILY_API_KEY'
 const TAVILY_BASE_URL_REF = 'TAVILY_BASE_URL'
-const SERPER_ENABLED_REF = 'SERPER_SEARCH_ENABLED'
 const SERPER_KEY_REF = 'SERPER_API_KEY'
 const SERPER_BASE_URL_REF = 'SERPER_BASE_URL'
 const DEFAULT_SERPER_REF = 'WEB_SEARCH_DEFAULT_SERPER'
@@ -58,11 +64,9 @@ const DEFAULT_SERPER_REF = 'WEB_SEARCH_DEFAULT_SERPER'
 export const Config = Schema.object({
   maxResults: Schema.number().min(1).max(20).step(1).default(5),
   searchTimeoutMs: Schema.number().min(1).step(1).default(DEFAULT_TIMEOUT_MS),
-  tavilyEnabled: Schema.boolean().default(false),
-  serperEnabled: Schema.boolean().default(false),
-  tavilyBaseURL: Schema.string().default(''),
-  serperBaseURL: Schema.string().default(''),
-  defaultChannel: Schema.string().default(TAVILY_CHANNEL),
+  tavilyBaseURL: Schema.string().default('').volatile(),
+  serperBaseURL: Schema.string().default('').volatile(),
+  defaultChannel: Schema.string().default(TAVILY_CHANNEL).volatile(),
 })
 
 export type ConfigType = ReturnType<typeof Config>
@@ -152,45 +156,45 @@ async function resolveBaseURL(
   ctx: DshContext,
   config: ConfigType,
   credRef: string,
-  configKey: string,
+  configKey: 'tavilyBaseURL' | 'serperBaseURL',
   defaultHost: string,
 ): Promise<string> {
   const credVal = await resolveRef(ctx, credRef)
   if (credVal && credVal.trim().length > 0) return credVal.trim()
-  const cfgVal = (config as Record<string, unknown>)[configKey]
+  const cfgVal = config[configKey].get()
   if (typeof cfgVal === 'string' && cfgVal.trim().length > 0) return cfgVal.trim()
   return defaultHost
+}
+
+/**
+ * 拼接搜索端点路径。
+ *
+ * 不能写成 `new URL('/search', baseURL)`：那会把自定义地址里的路径前缀
+ * （如 `https://host/tavily` 的 `/tavily`）整段替换掉，导致两个渠道最终
+ * 都打到同一个 `/search` 上。这里改为在前缀之后追加，且对已以该路径
+ * 结尾的地址保持幂等。
+ */
+function buildSearchURL(baseURL: string, path = '/search'): string {
+  const trimmed = baseURL.trim().replace(/\/+$/, '')
+  return trimmed.endsWith(path) ? trimmed : `${trimmed}${path}`
 }
 
 // ═══════════════════════════════════════════════════════════
 //  Channel resolution
 // ═══════════════════════════════════════════════════════════
 
+/**
+ * 去掉启用开关后，实际使用的渠道完全由默认渠道决定。
+ * credential 上的 legacy DEFAULT_SERPER_REF 仍保持最高优先级。
+ */
 async function resolveChannel(
   ctx: DshContext,
   config: ConfigType,
 ): Promise<string | null> {
-  const [tavilyOnCred, serperOnCred, defaultSerper] = await Promise.all([
-    resolveRef(ctx, TAVILY_ENABLED_REF),
-    resolveRef(ctx, SERPER_ENABLED_REF),
-    resolveRef(ctx, DEFAULT_SERPER_REF),
-  ])
-  const tavilyOn = truthy(tavilyOnCred) || config.tavilyEnabled === true
-  const serperOn = truthy(serperOnCred) || config.serperEnabled === true
-  const preferred = truthy(defaultSerper)
-    ? SERPER_CHANNEL
-    : config.defaultChannel === SERPER_CHANNEL
-      ? SERPER_CHANNEL
-      : TAVILY_CHANNEL
-
-  const enabled: Record<string, boolean> = {
-    [TAVILY_CHANNEL]: tavilyOn,
-    [SERPER_CHANNEL]: serperOn,
-  }
-  if (enabled[preferred]) return preferred
-  if (enabled[TAVILY_CHANNEL]) return TAVILY_CHANNEL
-  if (enabled[SERPER_CHANNEL]) return SERPER_CHANNEL
-  return null
+  const defaultSerper = await resolveRef(ctx, DEFAULT_SERPER_REF)
+  if (truthy(defaultSerper)) return SERPER_CHANNEL
+  if (config.defaultChannel.get() === SERPER_CHANNEL) return SERPER_CHANNEL
+  return TAVILY_CHANNEL
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -231,7 +235,7 @@ async function searchTavily(
   const timer = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
-    const res = await fetch(new URL('/search', baseURL).toString(), {
+    const res = await fetch(buildSearchURL(baseURL), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -283,9 +287,7 @@ async function searchSerper(
   const timer = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
-    const url = baseURL.endsWith('/search')
-      ? baseURL
-      : new URL('/search', baseURL).toString()
+    const url = buildSearchURL(baseURL)
     const res = await fetch(url, {
       method: 'POST',
       headers: {
@@ -307,37 +309,29 @@ async function searchSerper(
 }
 
 // ═══════════════════════════════════════════════════════════
-//  DeepSeek fallback
-// ═══════════════════════════════════════════════════════════
-
-async function getDeepSeekProvider(ctx: DshContext): Promise<WebSearchProvider | undefined> {
-  try {
-    const providers = ctx.get('webSearchProviders')
-    if (!providers) return undefined
-    const deepseek = Object.values(providers).find(
-      (p) => p.id !== 'web-search' && p.id !== 'web-search-tavily',
-    )
-    return deepseek
-  } catch {
-    return undefined
-  }
-}
-
-// ═══════════════════════════════════════════════════════════
 //  Probe endpoints
 // ═══════════════════════════════════════════════════════════
 
+/**
+ * 原生 http.ServerResponse 没有 Express 的 status()/json()，
+ * 直接 writeHead + end 输出 JSON；body 为 null/undefined 时只发状态码。
+ */
 function sendJson(
   res: unknown,
   status: number,
   body: unknown,
 ): void {
   const r = res as {
-    status: (n: number) => unknown
-    json: (b: unknown) => unknown
+    writeHead: (status: number, headers?: Record<string, string>) => void
+    end: (body?: string) => void
   }
-  r.status(status)
-  r.json(body)
+  if (body === null || body === undefined) {
+    r.writeHead(status)
+    r.end()
+    return
+  }
+  r.writeHead(status, { 'content-type': 'application/json; charset=utf-8' })
+  r.end(JSON.stringify(body))
 }
 
 function createProbeHandler(
@@ -393,31 +387,19 @@ function createProbeHandler(
 // ═══════════════════════════════════════════════════════════
 
 export const name = 'dsh-web-search'
-export const inject = ['webServer', 'credentials', 'settings']
-
-/** Settings 命名空间 */
-const WEB_SEARCH_NS = settingsNamespace('web-search')
+export const inject = ['web', 'webServer', 'credentials', 'settings']
 
 export function apply(ctx: DshContext, config: ConfigType): void {
-  // ── Register settings namespace (so client settingsScope.bind can read/write) ──
-  ctx.settings.register(WEB_SEARCH_NS, Config, { applies: 'live' })
-
-  // ── One-time migration: copy old credential values into config ──
+  // ── One-time migration: copy old baseURL credentials into config ──
   void (async () => {
     for (const [credRef, cfgKey] of [
-      [TAVILY_ENABLED_REF, 'tavilyEnabled'],
-      [SERPER_ENABLED_REF, 'serperEnabled'],
       [TAVILY_BASE_URL_REF, 'tavilyBaseURL'],
       [SERPER_BASE_URL_REF, 'serperBaseURL'],
     ] as const) {
       try {
         const credVal = await resolveRef(ctx, credRef)
-        if (credVal != null && String(credVal).length > 0 && !config[cfgKey as keyof ConfigType]) {
-          const v: unknown = (cfgKey as string).endsWith('Enabled')
-            ? truthy(credVal)
-            : String(credVal)
-          ctx.settings.set('web-search', cfgKey, v)
-          ;(config as Record<string, unknown>)[cfgKey] = v
+        if (credVal != null && String(credVal).length > 0 && !config[cfgKey].get()) {
+          await ctx.settings.update('web-search', { [cfgKey]: String(credVal) })
         }
       } catch {
         /* best-effort */
@@ -425,9 +407,8 @@ export function apply(ctx: DshContext, config: ConfigType): void {
     }
     try {
       const defSerper = await resolveRef(ctx, DEFAULT_SERPER_REF)
-      if (truthy(defSerper) && config.defaultChannel !== SERPER_CHANNEL) {
-        ctx.settings.set('web-search', 'defaultChannel', SERPER_CHANNEL)
-        config.defaultChannel = SERPER_CHANNEL
+      if (truthy(defSerper) && config.defaultChannel.get() !== SERPER_CHANNEL) {
+        await ctx.settings.update('web-search', { defaultChannel: SERPER_CHANNEL })
       }
     } catch {
       /* best-effort */
@@ -444,37 +425,33 @@ export function apply(ctx: DshContext, config: ConfigType): void {
       const channel = await resolveChannel(ctx, config)
       const { maxResults, searchTimeoutMs } = config
 
-      if (channel) {
-        const keyRef = channel === TAVILY_CHANNEL ? TAVILY_KEY_REF : SERPER_KEY_REF
-        const baseRef = channel === TAVILY_CHANNEL ? TAVILY_BASE_URL_REF : SERPER_BASE_URL_REF
-        const host = channel === TAVILY_CHANNEL ? TAVILY_HOST : SERPER_HOST
-        const cfgKey = channel === TAVILY_CHANNEL ? 'tavilyBaseURL' : 'serperBaseURL'
+      const keyRef = channel === TAVILY_CHANNEL ? TAVILY_KEY_REF : SERPER_KEY_REF
+      const baseRef = channel === TAVILY_CHANNEL ? TAVILY_BASE_URL_REF : SERPER_BASE_URL_REF
+      const host = channel === TAVILY_CHANNEL ? TAVILY_HOST : SERPER_HOST
+      const cfgKey = channel === TAVILY_CHANNEL ? 'tavilyBaseURL' : 'serperBaseURL'
 
-        const [key, baseURL] = await Promise.all([
-          resolveRef(ctx, keyRef),
-          resolveBaseURL(ctx, config, baseRef, cfgKey, host),
-        ])
+      const [key, baseURL] = await Promise.all([
+        resolveRef(ctx, keyRef),
+        resolveBaseURL(ctx, config, baseRef, cfgKey, host),
+      ])
 
-        const searchFn = channel === TAVILY_CHANNEL ? searchTavily : searchSerper
-        const sources = await searchFn(baseURL, key, request, maxResults, searchTimeoutMs, signal)
-        return { sources }
-      }
-
-      // Both channels off → fall back to official DeepSeek
-      const deepseek = await getDeepSeekProvider(ctx)
-      if (deepseek) {
-        return deepseek.search(request, signal)
-      }
-
-      throw new WebError('No web search channel available', 'WEB_UNAVAILABLE')
+      const searchFn = channel === TAVILY_CHANNEL ? searchTavily : searchSerper
+      const sources = await searchFn(baseURL, key, request, maxResults, searchTimeoutMs, signal)
+      return { sources }
     },
   }
 
-  const providers = ctx.get('webSearchProviders') as
-    | Record<string, WebSearchProvider>
-    | undefined
-  if (providers) {
-    providers['web-search'] = provider
+  const web = ctx.get('web')
+  if (web) {
+    // Current API: register with the `web` service, which disposes the entry
+    // with this plugin's fiber.
+    web.registerSearchProvider(provider)
+  } else {
+    // Legacy fallback for DSH versions that still expose a provider registry.
+    const providers = ctx.get('webSearchProviders')
+    if (providers) {
+      providers['web-search'] = provider
+    }
   }
 
   // ── Probe endpoints ──
@@ -500,29 +477,21 @@ export function apply(ctx: DshContext, config: ConfigType): void {
           const [
             travilyURL,
             serperURL,
-            travilyOn,
-            serperOn,
             defSerper,
           ] = await Promise.all([
             resolveBaseURL(ctx, config, TAVILY_BASE_URL_REF, 'tavilyBaseURL', TAVILY_HOST),
             resolveBaseURL(ctx, config, SERPER_BASE_URL_REF, 'serperBaseURL', SERPER_HOST),
-            resolveRef(ctx, TAVILY_ENABLED_REF),
-            resolveRef(ctx, SERPER_ENABLED_REF),
             resolveRef(ctx, DEFAULT_SERPER_REF),
           ])
           return sendJson(res, 200, {
-            tavilyEnabled: truthy(travilyOn) || config.tavilyEnabled === true,
-            serperEnabled: truthy(serperOn) || config.serperEnabled === true,
             tavilyBaseURL: travilyURL === TAVILY_HOST ? '' : travilyURL,
             serperBaseURL: serperURL === SERPER_HOST ? '' : serperURL,
             defaultChannel: truthy(defSerper)
               ? SERPER_CHANNEL
-              : config.defaultChannel || TAVILY_CHANNEL,
+              : config.defaultChannel.get() || TAVILY_CHANNEL,
           })
         } catch {
           return sendJson(res, 200, {
-            tavilyEnabled: false,
-            serperEnabled: false,
             tavilyBaseURL: '',
             serperBaseURL: '',
             defaultChannel: TAVILY_CHANNEL,
