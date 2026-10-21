@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import type { SettingsScope, SettingsScopeSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
+import type { ConfigForm, ConfigFormSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
 
 // ── 常量 ────────────────────────────────────────────────────────
 
@@ -15,14 +15,8 @@ function injectCss(): () => void {
   const prev = document.querySelector('style[data-dws-search-css]')
   if (prev) prev.remove()
   const tag = document.createElement('style')
-  tag.setAttribute('data-dws-search-css', '3')
+  tag.setAttribute('data-dws-search-css', '5')
   tag.textContent = [
-    '.dws_toggle{flex:none;appearance:none;border:1px solid var(--dsw-alias-border-l3);background:var(--dsw-alias-bg-layer-3);cursor:pointer;border-radius:999px;width:40px;height:22px;padding:2px;transition:background .12s,border-color .12s;display:inline-flex;position:relative}',
-    '.dws_toggle[aria-checked=true]{border-color:var(--dsw-alias-brand-primary);background:var(--dsw-alias-brand-primary)}',
-    '.dws_toggle:disabled{opacity:.4;cursor:default}',
-    '.dws_toggle:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}',
-    '.dws_toggleKnob{background:var(--dsw-alias-label-primary-foreground,#fff);width:18px;height:18px;box-shadow:0 0 0 1px var(--dsw-alias-border-l4,#0f172a1f);border-radius:50%;transition:transform .12s;display:block;transform:translate(0)}',
-    '.dws_toggle[aria-checked=true] .dws_toggleKnob{transform:translate(18px)}',
     '.dws_input{width:100%;height:34px;padding:0 12px;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-3);font:inherit;font-size:13px;line-height:1.5;color:var(--dsw-alias-label-primary);box-sizing:border-box}',
     '.dws_input:focus-visible{outline:none;border-color:var(--dsw-alias-brand-primary)}',
     '.dws_input:disabled{color:var(--dsw-alias-label-tertiary);cursor:default}',
@@ -37,42 +31,19 @@ function injectCss(): () => void {
   return () => tag.remove()
 }
 
-// ── ToggleSwitch ────────────────────────────────────────────
-
-function ToggleSwitch({
-  checked,
-  disabled,
-  onChange,
-}: {
-  checked: boolean
-  disabled: boolean
-  onChange: () => void
-}): React.ReactElement {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      disabled={disabled}
-      className="dws_toggle"
-      onClick={onChange}
-    >
-      <span className="dws_toggleKnob" />
-    </button>
-  )
-}
-
 // ── Styles ──────────────────────────────────────────────────
 
 const cardStyle: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
-  gap: 2,
+  gap: 10,
+}
+
+const cardItemStyle: React.CSSProperties = {
   border: '1px solid var(--dsw-alias-border-l2)',
   borderRadius: 12,
   background: 'var(--dsw-alias-bg-layer-3)',
   overflow: 'hidden',
-  padding: '4px 0',
 }
 
 const rowStyle: React.CSSProperties = {
@@ -106,27 +77,12 @@ const fieldLabel: React.CSSProperties = {
   color: 'var(--dsw-alias-label-primary)',
 }
 
-const dividerStyle: React.CSSProperties = {
-  height: 1,
-  margin: '0 16px',
-  background: 'var(--dsw-alias-border-l2)',
+function hoverOn(e: React.MouseEvent<HTMLElement>) {
+  ;(e.currentTarget as HTMLElement).style.background = 'var(--dsw-alias-bg-layer-2)'
 }
 
-const sectionTitleStyle: React.CSSProperties = {
-  fontSize: 12,
-  fontWeight: 600,
-  color: 'var(--dsw-alias-label-secondary)',
-  padding: '8px 16px 4px',
-  textTransform: 'uppercase',
-  letterSpacing: '0.5px',
-} as React.CSSProperties
-
-function hoverOn(e: React.MouseEvent<HTMLLabelElement>) {
-  ;(e.currentTarget as HTMLLabelElement).style.background = 'var(--dsw-alias-bg-layer-2)'
-}
-
-function hoverOff(e: React.MouseEvent<HTMLLabelElement>) {
-  ;(e.currentTarget as HTMLLabelElement).style.background = ''
+function hoverOff(e: React.MouseEvent<HTMLElement>) {
+  ;(e.currentTarget as HTMLElement).style.background = ''
 }
 
 // ── Probe ───────────────────────────────────────────────────
@@ -149,8 +105,6 @@ function probeText(fail: ProbeResult): string {
 // ── WebSearchConfig ─────────────────────────────────────────
 
 interface WebSearchConfig {
-  tavilyEnabled: boolean
-  serperEnabled: boolean
   tavilyBaseURL: string
   serperBaseURL: string
   defaultChannel: string
@@ -168,17 +122,27 @@ interface Connection {
 }
 
 interface WebSearchProps {
-  scope: SettingsScope<WebSearchConfig>
+  scope: ConfigForm<WebSearchConfig>
   api: Connection['api']
 }
 
 function WebSearchSection(props: Record<string, unknown>): React.ReactElement {
   const { scope, api } = props as unknown as WebSearchProps
-  const [snap, setSnap] = useState<SettingsScopeSnapshot<WebSearchConfig>>(() => scope.getSnapshot())
+  const [snap, setSnap] = useState<ConfigFormSnapshot<WebSearchConfig>>(() => scope.getSnapshot())
   useEffect(() => scope.subscribe(() => setSnap(scope.getSnapshot())), [scope])
 
   const values = (snap.value ?? {}) as WebSearchConfig
   const writable = snap.writable && snap.status === 'ready'
+  const [writeError, setWriteError] = useState<string | undefined>()
+  const setConfig = async (field: keyof WebSearchConfig, value: boolean | string) => {
+    setWriteError(undefined)
+    try {
+      const accepted = await scope.set(field, value)
+      if (!accepted) setWriteError('设置未保存，请根据最新状态重试。')
+    } catch {
+      setWriteError('设置保存失败，请检查连接后重试。')
+    }
+  }
 
   const [tKey, setTKey] = useState('')
   const [sKey, setSKey] = useState('')
@@ -208,10 +172,8 @@ function WebSearchSection(props: Record<string, unknown>): React.ReactElement {
     })()
   }, [api])
 
-  const tOn = values.tavilyEnabled === true
-  const sOn = values.serperEnabled === true
   const defCh = values.defaultChannel || 'tavily'
-  const def = tOn && sOn ? defCh : tOn ? 'tavily' : sOn ? 'serper' : null
+  const [open, setOpen] = useState<'tavily' | 'serper' | null>('tavily')
 
   const doSave = useCallback(async () => {
     setSaving(true)
@@ -269,176 +231,173 @@ function WebSearchSection(props: Record<string, unknown>): React.ReactElement {
     return <div style={{ padding: 16, color: 'var(--dsw-alias-label-secondary)' }}>加载中…</div>
   }
 
+  if (snap.status === 'unavailable') {
+    return <div style={{ padding: 16, color: 'var(--dsw-alias-label-secondary)' }}>
+      {snap.mode === 'memory'
+        ? '当前连接不支持保存设置，请在 DSH 所在电脑通过 localhost 打开设置。'
+        : 'Web 搜索设置暂不可用，请确认 DSH 已加载兼容的 dsh-web-search 插件，并刷新页面。'}
+    </div>
+  }
+
+  // 可复用的「点击展开」渠道分组
+  const channelBlock = (
+    ch: 'tavily' | 'serper',
+    opts: {
+      title: string
+      hint: string
+      keyOk: boolean
+      keyPlaceholder: string
+      keyDraft: string
+      onKey: (v: string) => void
+      probe: typeof tp
+      onProbe: () => void
+    },
+  ): React.ReactElement => {
+    const active = defCh === ch
+    const isOpen = open === ch
+    const baseURL = ch === 'tavily' ? values.tavilyBaseURL : values.serperBaseURL
+    const onBase = (v: string) =>
+      void setConfig(ch === 'tavily' ? 'tavilyBaseURL' : 'serperBaseURL', v)
+    return (
+      <div key={ch} style={cardItemStyle}>
+        <div
+          role="button"
+          tabIndex={0}
+          aria-expanded={isOpen}
+          style={writable ? rowStyle : rowDisabled}
+          onMouseEnter={writable ? hoverOn : undefined}
+          onMouseLeave={writable ? hoverOff : undefined}
+          onClick={writable ? () => setOpen(isOpen ? null : ch) : undefined}
+          onKeyDown={
+            writable
+              ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    setOpen(isOpen ? null : ch)
+                  }
+                }
+              : undefined
+          }
+        >
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={labelStyle}>{opts.title}</span>
+            {active && <span className="dws_badge">默认</span>}
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 12, color: 'var(--dsw-alias-label-tertiary)' }}>{opts.hint}</span>
+            <span style={{ fontSize: 12, color: 'var(--dsw-alias-label-tertiary)', transition: 'transform 0.12s', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+              ›
+            </span>
+          </span>
+        </div>
+        {isOpen && (
+          <div style={fieldStyle}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={fieldLabel}>API Key</span>
+              {opts.keyOk && <span className="dws_badge">已配置</span>}
+            </div>
+            <input
+              className="dws_input"
+              type="password"
+              placeholder={opts.keyPlaceholder}
+              value={opts.keyDraft}
+              disabled={saving}
+              onChange={(e) => opts.onKey(e.target.value)}
+            />
+            <span style={{ ...fieldLabel, marginTop: 8 }}>自定义接口地址</span>
+            <input
+              className="dws_input"
+              type="text"
+              placeholder={ch === 'tavily' ? 'https://api.tavily.com' : 'https://google.serper.dev'}
+              value={baseURL || ''}
+              disabled={!writable}
+              onChange={(e) => onBase(e.target.value)}
+            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button
+                className="dws_btn"
+                disabled={opts.probe?.probing || false}
+                onClick={opts.onProbe}
+              >
+                {opts.probe?.probing ? '测试中…' : '连通测试'}
+              </button>
+              {opts.probe?.result && (
+                <span
+                  style={{
+                    fontSize: 12,
+                    lineHeight: '17px',
+                    color: opts.probe.result.ok
+                      ? 'var(--dsw-alias-state-success-primary)'
+                      : 'var(--dsw-alias-label-error)',
+                  }}
+                >
+                  {opts.probe.result.ok ? '✓ 连通正常' : '✗ ' + probeText(opts.probe.result)}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div style={cardStyle}>
-      {/* ── Tavily ── */}
-      <div style={sectionTitleStyle}>Tavily</div>
-      <label
-        style={writable ? rowStyle : rowDisabled}
-        onMouseEnter={writable ? hoverOn : undefined}
-        onMouseLeave={writable ? hoverOff : undefined}
-      >
-        <span style={labelStyle}>
-          启用 Tavily
-          <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--dsw-alias-label-tertiary)' }}>
-            （无 Key 走 keyless）
-          </span>
-        </span>
-        <span style={{ flex: 1 }}></span>
-        <ToggleSwitch
-          checked={tOn}
-          disabled={!writable}
-          onChange={() => scope.set('tavilyEnabled', !tOn)}
-        />
-      </label>
-      {tOn && (
-        <div style={fieldStyle}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={fieldLabel}>API Key</span>
-            {tOk && <span className="dws_badge">已配置</span>}
-          </div>
-          <input
-            className="dws_input"
-            type="password"
-            placeholder={tOk ? '已配置密钥' : '可选，留空走 keyless'}
-            value={tKey}
-            disabled={saving}
-            onChange={(e) => setTKey(e.target.value)}
-          />
-          <span style={{ ...fieldLabel, marginTop: 8 }}>自定义接口地址</span>
-          <input
-            className="dws_input"
-            type="text"
-            placeholder="https://api.tavily.com"
-            value={values.tavilyBaseURL || ''}
-            onChange={(e) => scope.set('tavilyBaseURL', e.target.value)}
-          />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button
-              className="dws_btn"
-              disabled={(tp && tp.probing) || false}
-              onClick={() => { void doProbe('tavily') }}
-            >
-              {tp && tp.probing ? '测试中…' : '连通测试'}
-            </button>
-            {tp && tp.result && (
-              <span
-                style={{
-                  fontSize: 12,
-                  lineHeight: '17px',
-                  color: tp.result.ok
-                    ? 'var(--dsw-alias-state-success-primary)'
-                    : 'var(--dsw-alias-label-error)',
-                }}
-              >
-                {tp.result.ok ? '✓ 连通正常' : '✗ ' + probeText(tp.result)}
-              </span>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ── Serper ── */}
-      <div style={dividerStyle} />
-      <div style={sectionTitleStyle}>Serper</div>
-      <label
-        style={writable ? rowStyle : rowDisabled}
-        onMouseEnter={writable ? hoverOn : undefined}
-        onMouseLeave={writable ? hoverOff : undefined}
-      >
-        <span style={labelStyle}>
-          启用 Serper
-          <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--dsw-alias-label-tertiary)' }}>
-            （需要 API Key）
-          </span>
-        </span>
-        <span style={{ flex: 1 }}></span>
-        <ToggleSwitch
-          checked={sOn}
-          disabled={!writable}
-          onChange={() => scope.set('serperEnabled', !sOn)}
-        />
-      </label>
-      {sOn && (
-        <div style={fieldStyle}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={fieldLabel}>API Key</span>
-            {sOk && <span className="dws_badge">已配置</span>}
-          </div>
-          <input
-            className="dws_input"
-            type="password"
-            placeholder={sOk ? '已配置密钥' : '必填，前往 serper.dev 获取'}
-            value={sKey}
-            disabled={saving}
-            onChange={(e) => setSKey(e.target.value)}
-          />
-          <span style={{ ...fieldLabel, marginTop: 8 }}>自定义接口地址</span>
-          <input
-            className="dws_input"
-            type="text"
-            placeholder="https://google.serper.dev"
-            value={values.serperBaseURL || ''}
-            onChange={(e) => scope.set('serperBaseURL', e.target.value)}
-          />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button
-              className="dws_btn"
-              disabled={(sp && sp.probing) || false}
-              onClick={() => { void doProbe('serper') }}
-            >
-              {sp && sp.probing ? '测试中…' : '连通测试'}
-            </button>
-            {sp && sp.result && (
-              <span
-                style={{
-                  fontSize: 12,
-                  lineHeight: '17px',
-                  color: sp.result.ok
-                    ? 'var(--dsw-alias-state-success-primary)'
-                    : 'var(--dsw-alias-label-error)',
-                }}
-              >
-                {sp.result.ok ? '✓ 连通正常' : '✗ ' + probeText(sp.result)}
-              </span>
-            )}
-          </div>
-        </div>
-      )}
+      {channelBlock('tavily', {
+        title: 'Tavily',
+        hint: '无 Key 走 keyless',
+        keyOk: tOk,
+        keyPlaceholder: tOk ? '已配置密钥' : '可选，留空走 keyless',
+        keyDraft: tKey,
+        onKey: setTKey,
+        probe: tp,
+        onProbe: () => { void doProbe('tavily') },
+      })}
+      {channelBlock('serper', {
+        title: 'Serper',
+        hint: '需要 API Key',
+        keyOk: sOk,
+        keyPlaceholder: sOk ? '已配置密钥' : '必填，前往 serper.dev 获取',
+        keyDraft: sKey,
+        onKey: setSKey,
+        probe: sp,
+        onProbe: () => { void doProbe('serper') },
+      })}
 
       {/* ── Default channel ── */}
-      <div style={dividerStyle} />
-      <div style={sectionTitleStyle}>默认渠道</div>
-      <div style={{ padding: '8px 16px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <select
-          value={defCh}
-          disabled={!writable}
-          onChange={(e) => scope.set('defaultChannel', e.target.value)}
-          style={{
-            height: 34,
-            padding: '0 12px',
-            border: '1px solid var(--dsw-alias-border-l2)',
-            borderRadius: 8,
-            background: 'var(--dsw-alias-bg-layer-3)',
-            font: 'inherit',
-            fontSize: 13,
-            color: 'var(--dsw-alias-label-primary)',
-            cursor: 'pointer',
-          }}
-        >
-          <option value="tavily">Tavily</option>
-          <option value="serper">Serper</option>
-        </select>
-        <p style={{ fontSize: 12, lineHeight: '1.5', color: 'var(--dsw-alias-label-tertiary)' }}>
-          {def
-            ? '当前默认：' +
-              (def === 'tavily' ? 'Tavily' : 'Serper') +
-              (tOn && sOn ? '' : '（仅一个渠道启用，自动使用）')
-            : '两个渠道都未启用，搜索走官方 DeepSeek。'}
-        </p>
+      <div style={cardItemStyle}>
+        <div style={rowStyle}>
+          <span style={labelStyle}>默认渠道</span>
+          <span style={{ fontSize: 12, color: 'var(--dsw-alias-label-tertiary)' }}>实际使用的 API</span>
+        </div>
+        <div style={{ padding: '4px 16px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <select
+            value={defCh}
+            disabled={!writable}
+            onChange={(e) => { void setConfig('defaultChannel', e.target.value) }}
+            style={{
+              height: 34,
+              padding: '0 12px',
+              border: '1px solid var(--dsw-alias-border-l2)',
+              borderRadius: 8,
+              background: 'var(--dsw-alias-bg-layer-3)',
+              font: 'inherit',
+              fontSize: 13,
+              color: 'var(--dsw-alias-label-primary)',
+              cursor: 'pointer',
+            }}
+          >
+            <option value="tavily">Tavily</option>
+            <option value="serper">Serper</option>
+          </select>
+          <p style={{ fontSize: 12, lineHeight: '1.5', color: 'var(--dsw-alias-label-tertiary)' }}>
+            搜索实际使用默认渠道所对应的 API。
+          </p>
+        </div>
       </div>
 
       {/* ── Footer ── */}
+      {writeError && <div role="alert" style={{ padding: '8px 16px', color: 'var(--dsw-alias-label-error)' }}>{writeError}</div>}
       <div
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, padding: '12px 16px 8px' }}
       >
@@ -458,7 +417,7 @@ function WebSearchSection(props: Record<string, unknown>): React.ReactElement {
 // ── Plugin ──────────────────────────────────────────────────
 
 export const name = 'dsh-web-search-client'
-export const inject = ['slots', 'webUiSettings', 'connection'] as const
+export const inject = ['slots', 'configForms', 'connection'] as const
 
 interface ClientContext {
   slots: {
@@ -474,15 +433,15 @@ interface ClientContext {
       comp: React.FC<Record<string, unknown>>,
     ): () => void
   }
-  webUiSettings: {
-    bind<T>(spec: { namespace: string }): SettingsScope<T>
+  configForms: {
+    get<T>(entryId: string): ConfigForm<T>
   }
   get(key: string): Connection
 }
 
 export function apply(ctx: ClientContext): void {
   const { api } = ctx.get('connection')
-  const scope = ctx.webUiSettings.bind<WebSearchConfig>({ namespace: 'web-search' })
+  const scope = ctx.configForms.get<WebSearchConfig>('web-search')
 
   // Inject CSS
   const disposeCss = injectCss()
